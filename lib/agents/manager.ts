@@ -2,15 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/db";
 import * as tasks from "@/lib/services/tasks";
 import * as memory from "@/lib/services/memory";
-import fs from "node:fs";
 import path from "node:path";
-import config from "../../agents/manager/config.json";
+import { loadAgentDefinition } from "@/lib/agents/loadAgentDefinition";
 
 const client = new Anthropic(); // reads ANTHROPIC_API_KEY from the environment
 
-const SYSTEM_PROMPT = fs.readFileSync(
-  path.join(process.cwd(), "agents/manager/system-prompt.md"),
-  "utf-8"
+const AGENT_DEF = loadAgentDefinition(
+  path.join(process.cwd(), "agents/PROJECT_MANAGER.md")
 );
 
 const tools: Anthropic.Tool[] = [
@@ -152,15 +150,15 @@ export async function runManager(projectId: string) {
   let finalText = "";
 
   try {
-    for (let i = 0; i < config.maxToolIterations; i++) {
+    for (let i = 0; i < AGENT_DEF.maxToolIterations; i++) {
       // No `thinking` field: on claude-opus-5, omitting it runs adaptive thinking
       // by default, which is the desired behavior here (see plan notes).
       const response = await client.messages.create({
-        model: config.model,
-        max_tokens: config.maxTokens,
-        system: SYSTEM_PROMPT,
+        model: AGENT_DEF.model,
+        max_tokens: AGENT_DEF.maxTokens,
+        system: AGENT_DEF.systemPrompt,
         tools,
-        output_config: { effort: config.effort as Anthropic.OutputConfig["effort"] },
+        output_config: { effort: AGENT_DEF.effort as Anthropic.OutputConfig["effort"] },
         messages,
       });
 

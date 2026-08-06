@@ -1,23 +1,22 @@
 import { PrismaClient } from "@prisma/client";
-import fs from "node:fs";
 import path from "node:path";
+import { loadAgentDefinition } from "../lib/agents/loadAgentDefinition";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const systemPrompt = fs.readFileSync(
-    path.join(process.cwd(), "agents/manager/system-prompt.md"),
-    "utf-8"
+  const agentDef = loadAgentDefinition(
+    path.join(process.cwd(), "agents/PROJECT_MANAGER.md")
   );
 
   await prisma.agent.upsert({
-    where: { name: "manager" },
-    update: { systemPrompt },
+    where: { name: agentDef.name },
+    update: { systemPrompt: agentDef.systemPrompt, model: agentDef.model },
     create: {
-      name: "manager",
+      name: agentDef.name,
       role: "Project and task manager",
-      systemPrompt,
-      model: "claude-opus-5",
+      systemPrompt: agentDef.systemPrompt,
+      model: agentDef.model,
       isActive: true,
     },
   });
