@@ -32,7 +32,18 @@ export const createTaskSchema = z.object({
   dueDate: z.coerce.date().optional(),
 });
 
-export const updateTaskSchema = createTaskSchema.partial().omit({ projectId: true });
+// Defined independently rather than via createTaskSchema.partial(): Zod applies
+// a field's .default() before its .optional() check when the two are composed
+// through .partial(), so an omitted field would silently be reset to its default
+// instead of being left untouched — breaking partial-update semantics.
+export const updateTaskSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  status: TaskStatus.optional(),
+  priority: TaskPriority.optional(),
+  assignedAgent: z.string().optional(),
+  dueDate: z.coerce.date().optional(),
+});
 
 export const createMemorySchema = z.object({
   scope: MemoryScope.default("project"),
