@@ -1,0 +1,7 @@
+{
+  "name": "manager",
+  "model": "claude-opus-5",
+  "maxTokens": 8000,
+  "effort": "medium",
+  "maxToolIterations": 8
+}

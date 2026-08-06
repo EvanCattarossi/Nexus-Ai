@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// status: "planning" | "active" | "paused" | "done"
+model Project {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  status      String   @default("planning")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks    Task[]
+  memories Memory[]
+  runs     AgentRun[]
+
+  @@index([status])
+}
+
+// status: "todo" | "in_progress" | "blocked" | "review" | "done"
+// priority: "low" | "medium" | "high" | "urgent"
+model Task {
+  id            String    @id @default(cuid())
+  projectId     String
+  title         String
+  description   String?
+  status        String    @default("todo")
+  priority      String    @default("medium")
+  assignedAgent String?
+  dueDate       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs    AgentRun[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// v1: a single row, name = "manager"
+model Agent {
+  id           String  @id @default(cuid())
+  name         String  @unique
+  role         String
+  systemPrompt String
+  model        String  @default("claude-opus-5")
+  isActive     Boolean @default(true)
+
+  runs AgentRun[]
+}
+
+// execution log — status: "running" | "success" | "error"
+model AgentRun {
+  id         String    @id @default(cuid())
+  agentId    String
+  projectId  String?
+  taskId     String?
+  input      String
+  output     String?
+  status     String    @default("running")
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  agent   Agent    @relation(fields: [agentId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task    Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([agentId])
+  @@index([projectId])
+}
+
+// scope: "global" | "project" — type: "fact" | "decision" | "note"
+model Memory {
+  id        String   @id @default(cuid())
+  scope     String   @default("project")
+  projectId String?
+  type      String   @default("note")
+  title     String
+  content   String
+  tags      String? // JSON-encoded string[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([scope])
+}
