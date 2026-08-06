@@ -1,35 +1,41 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI, FunctionDeclaration, Type, Content } from "@google/genai";
 import { prisma } from "@/lib/db";
 import * as tasks from "@/lib/services/tasks";
 import * as memory from "@/lib/services/memory";
 import path from "node:path";
 import { loadAgentDefinition } from "@/lib/agents/loadAgentDefinition";
 
-const client = new Anthropic(); // reads ANTHROPIC_API_KEY from the environment
+// Initialisation du client Google Gemini avec la clé d'environnement
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const AGENT_DEF = loadAgentDefinition(
   path.join(process.cwd(), "agents/PROJECT_MANAGER.md")
 );
 
-const tools: Anthropic.Tool[] = [
+// Configuration des outils (tools) au format attendu par Gemini
+const tools: FunctionDeclaration[] = [
   {
     name: "list_tasks",
     description:
       "List the current project's existing tasks with their status, priority and description. " +
       "Use this before deciding to create or modify tasks, to avoid duplicates.",
-    input_schema: { type: "object", properties: {}, required: [] },
+    parameters: {
+      type: Type.OBJECT,
+      properties: {},
+      required: [],
+    },
   },
   {
     name: "create_task",
     description:
       "Create a new task in the current project. Use this to decompose a brief into actionable tasks.",
-    input_schema: {
-      type: "object",
+    parameters: {
+      type: Type.OBJECT,
       properties: {
-        title: { type: "string", description: "Short, actionable task title" },
-        description: { type: "string", description: "Detail of the expected deliverable" },
-        priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
-        dueDate: { type: "string", description: "Optional ISO 8601 date (YYYY-MM-DD)" },
+        title: { type: Type.STRING, description: "Short, actionable task title" },
+        description: { type: Type.STRING, description: "Detail of the expected deliverable" },
+        priority: { type: Type.STRING, enum: ["low", "medium", "high", "urgent"] },
+        dueDate: { type: Type.STRING, description: "Optional ISO 8601 date (YYYY-MM-DD)" },
       },
       required: ["title"],
     },
@@ -39,12 +45,12 @@ const tools: Anthropic.Tool[] = [
     description:
       "Update the status or priority of an existing task in the current project. " +
       "Use `list_tasks` first to get the exact ID.",
-    input_schema: {
-      type: "object",
+    parameters: {
+      type: Type.OBJECT,
       properties: {
-        taskId: { type: "string" },
-        status: { type: "string", enum: ["todo", "in_progress", "blocked", "review", "done"] },
-        priority: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+        taskId: { type: Type.STRING },
+        status: { type: Type.STRING, enum: ["todo", "in_progress", "blocked", "review", "done"] },
+        priority: { type: Type.STRING, enum: ["low", "medium", "high", "urgent"] },
       },
       required: ["taskId"],
     },
@@ -54,13 +60,13 @@ const tools: Anthropic.Tool[] = [
     description:
       "Write a memory entry (fact, decision or note) attached to the current project. " +
       "Use this to flag a blocker, record a decision, or note an important fact.",
-    input_schema: {
-      type: "object",
+    parameters: {
+      type: Type.OBJECT,
       properties: {
-        type: { type: "string", enum: ["fact", "decision", "note"] },
-        title: { type: "string" },
-        content: { type: "string" },
-        tags: { type: "array", items: { type: "string" } },
+        type: { type: Type.STRING, enum: ["fact", "decision", "note"] },
+        title: { type: Type.STRING },
+        content: { type: Type.STRING },
+        tags: { type: Type.ARRAY, items: { type: Type.STRING } },
       },
       required: ["type", "title", "content"],
     },
@@ -87,13 +93,13 @@ interface WriteMemoryInput {
   tags?: string[];
 }
 
-async function executeTool(name: string, input: unknown, projectId: string): Promise<string> {
+async function executeTool(name: string, input: unknown, projectId: string): Promise<Record<string, unknown>> {
   switch (name) {
     case "list_tasks": {
       const list = await tasks.listTasksByProject(projectId);
-      return JSON.stringify(
-        list.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority }))
-      );
+      return {
+        tasks: list.map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority }))
+      };
     }
     case "create_task": {
       const { title, description, priority, dueDate } = input as CreateTaskInput;
@@ -104,7 +110,7 @@ async function executeTool(name: string, input: unknown, projectId: string): Pro
         priority: (priority as "low" | "medium" | "high" | "urgent") ?? "medium",
         dueDate: dueDate ? new Date(dueDate) : undefined,
       });
-      return JSON.stringify({ id: t.id, title: t.title });
+      return { id: t.id, title: t.title };
     }
     case "update_task": {
       const { taskId, status, priority } = input as UpdateTaskInput;
@@ -112,7 +118,7 @@ async function executeTool(name: string, input: unknown, projectId: string): Pro
         status: status as "todo" | "in_progress" | "blocked" | "review" | "done" | undefined,
         priority: priority as "low" | "medium" | "high" | "urgent" | undefined,
       });
-      return JSON.stringify({ id: t.id, status: t.status });
+      return { id: t.id, status: t.status };
     }
     case "write_memory": {
       const { type, title, content, tags } = input as WriteMemoryInput;
@@ -124,20 +130,23 @@ async function executeTool(name: string, input: unknown, projectId: string): Pro
         content,
         tags,
       });
-      return JSON.stringify({ id: m.id });
+      return { id: m.id };
     }
     default:
-      return JSON.stringify({ error: `Unknown tool: ${name}` });
+      return { error: `Unknown tool: ${name}` };
   }
 }
 
-export async function runManager(projectId: string) {
+export async function runManager(projectId: string, instruction?: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
   const agent = await prisma.agent.findUniqueOrThrow({ where: { name: "manager" } });
 
   const userMessage =
     `Project: "${project.name}" (slug: ${project.slug}, status: ${project.status})\n\n` +
     `Description / brief:\n${project.description ?? "(no description provided)"}\n\n` +
+    (instruction?.trim()
+      ? `Specific instruction from the requester for this run:\n${instruction.trim()}\n\n`
+      : "") +
     `If this project has no tasks yet, decompose the brief into tasks. ` +
     `If tasks already exist, review the project's state and make the relevant ` +
     `updates and memory notes.`;
@@ -146,40 +155,49 @@ export async function runManager(projectId: string) {
     data: { agentId: agent.id, projectId, input: userMessage, status: "running" },
   });
 
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: userMessage }];
+  const contents: Content[] = [{ role: "user", parts: [{ text: userMessage }] }];
   let finalText = "";
 
   try {
-    for (let i = 0; i < AGENT_DEF.maxToolIterations; i++) {
-      // No `thinking` field: on claude-opus-5, omitting it runs adaptive thinking
-      // by default, which is the desired behavior here (see plan notes).
-      const response = await client.messages.create({
-        model: AGENT_DEF.model,
-        max_tokens: AGENT_DEF.maxTokens,
-        system: AGENT_DEF.systemPrompt,
-        tools,
-        output_config: { effort: AGENT_DEF.effort as Anthropic.OutputConfig["effort"] },
-        messages,
+    for (let i = 0; i < (AGENT_DEF.maxToolIterations ?? 5); i++) {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents,
+        config: {
+          systemInstruction: AGENT_DEF.systemPrompt,
+          maxOutputTokens: AGENT_DEF.maxTokens ?? 2048,
+          tools: [{ functionDeclarations: tools }],
+        },
       });
 
-      messages.push({ role: "assistant", content: response.content });
+      const candidate = response.candidates?.[0];
+      if (!candidate || !candidate.content) break;
 
-      if (response.stop_reason !== "tool_use") {
-        finalText = response.content
-          .filter((b): b is Anthropic.TextBlock => b.type === "text")
-          .map((b) => b.text)
-          .join("\n");
+      contents.push(candidate.content);
+
+      // Détecter si le modèle demande l'exécution d'un outil
+      const functionCalls = candidate.content.parts?.filter((p) => p.functionCall);
+
+      if (!functionCalls || functionCalls.length === 0) {
+        finalText = response.text ?? "";
         break;
       }
 
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of response.content) {
-        if (block.type === "tool_use") {
-          const result = await executeTool(block.name, block.input, projectId);
-          toolResults.push({ type: "tool_result", tool_use_id: block.id, content: result });
-        }
+      // Exécuter les fonctions requises et renvoyer les réponses au modèle
+      const functionResponses = [];
+      for (const part of functionCalls) {
+        const call = part.functionCall!;
+        if (!call.name) continue;
+        const result = await executeTool(call.name, call.args, projectId);
+        functionResponses.push({
+          functionResponse: {
+            name: call.name,
+            response: result,
+          },
+        });
       }
-      messages.push({ role: "user", content: toolResults });
+
+      contents.push({ role: "user", parts: functionResponses });
     }
 
     await prisma.agentRun.update({

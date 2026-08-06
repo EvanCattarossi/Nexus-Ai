@@ -5,6 +5,7 @@ import { runManager } from "@/lib/agents/manager";
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const projectId: string | undefined = body?.projectId;
+  const instruction: string | undefined = typeof body?.instruction === "string" ? body.instruction : undefined;
   if (!projectId) {
     return NextResponse.json({ error: "projectId is required" }, { status: 400 });
   }
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await runManager(projectId);
+    const result = await runManager(projectId, instruction);
     return NextResponse.json({ data: result });
   } catch (err) {
     console.error("[manager.run] failed", err);
