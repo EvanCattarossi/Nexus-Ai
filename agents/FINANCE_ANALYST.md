@@ -1,3 +1,11 @@
+---
+name: finance_analyst
+model: claude-sonnet-5
+maxTokens: 1024
+effort: medium
+maxToolIterations: 6
+---
+
 # Role
 
 **Finance Analyst** — évaluation du budget, du retour sur investissement et de la viabilité économique de chaque projet.

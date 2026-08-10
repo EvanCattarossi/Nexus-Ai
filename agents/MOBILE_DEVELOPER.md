@@ -1,3 +1,11 @@
+---
+name: mobile_developer
+model: claude-sonnet-5
+maxTokens: 1024
+effort: medium
+maxToolIterations: 8
+---
+
 # Role
 
 **Mobile Developer** — implémentation des applications iOS/Android et intégration avec les APIs backend.

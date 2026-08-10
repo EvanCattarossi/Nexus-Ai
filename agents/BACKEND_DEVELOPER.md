@@ -1,3 +1,11 @@
+---
+name: backend_developer
+model: claude-sonnet-5
+maxTokens: 1024
+effort: medium
+maxToolIterations: 8
+---
+
 # Role
 
 **Backend Developer** — implémentation des APIs et de la logique métier serveur.

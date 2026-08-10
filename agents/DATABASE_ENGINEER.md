@@ -1,3 +1,11 @@
+---
+name: database_engineer
+model: claude-sonnet-5
+maxTokens: 1024
+effort: medium
+maxToolIterations: 6
+---
+
 # Role
 
 **Database Engineer** — conception des schémas de données, indexation et performance des accès aux données.

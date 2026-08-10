@@ -1,7 +1,7 @@
 ---
 name: manager
 model: claude-opus-5
-maxTokens: 8000
+maxTokens: 1024
 effort: medium
 maxToolIterations: 8
 ---

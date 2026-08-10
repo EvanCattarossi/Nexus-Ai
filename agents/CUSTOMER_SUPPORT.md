@@ -1,3 +1,11 @@
+---
+name: customer_support
+model: claude-sonnet-5
+maxTokens: 1024
+effort: medium
+maxToolIterations: 6
+---
+
 # Role
 
 **Customer Support** — feedback utilisateurs et support de premier niveau sur les produits Nexus AI.

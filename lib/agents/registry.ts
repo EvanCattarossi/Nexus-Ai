@@ -21,11 +21,14 @@ export interface AgentMeta {
   };
 }
 
+// Kept within a single premium identity (emerald + gold) — shade varies by
+// department instead of switching hue family, so the org roster reads as one
+// cohesive agency rather than a rainbow of unrelated brand colors.
 const DEPARTMENT_ACCENT: Record<AgentDepartment, AgentMeta["accent"]> = {
-  direction: { bg: "bg-violet-500/15", text: "text-violet-600 dark:text-violet-400", ring: "ring-violet-500/30" },
-  engineering: { bg: "bg-blue-500/15", text: "text-blue-600 dark:text-blue-400", ring: "ring-blue-500/30" },
-  design: { bg: "bg-pink-500/15", text: "text-pink-600 dark:text-pink-400", ring: "ring-pink-500/30" },
-  growth: { bg: "bg-emerald-500/15", text: "text-emerald-600 dark:text-emerald-400", ring: "ring-emerald-500/30" },
+  direction: { bg: "bg-amber-400/15", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-400/40" },
+  engineering: { bg: "bg-emerald-500/15", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-500/30" },
+  design: { bg: "bg-teal-500/15", text: "text-teal-700 dark:text-teal-400", ring: "ring-teal-500/30" },
+  growth: { bg: "bg-green-600/15", text: "text-green-700 dark:text-green-400", ring: "ring-green-600/30" },
 };
 
 function agent(
@@ -34,7 +37,7 @@ function agent(
   roleFr: string,
   department: AgentDepartment,
   file: string,
-  active = false
+  active = true
 ): AgentMeta {
   return { id, label, roleFr, department, file, active, accent: DEPARTMENT_ACCENT[department] };
 }
@@ -71,13 +74,24 @@ function normalize(nameOrId: string): string {
   return nameOrId.trim().toLowerCase().replace(/\s+/g, "_");
 }
 
-/** Looks up an agent by its registry id, DB `Agent.name`, or a human label. Falls back to a neutral default for unknown values (e.g. a task's freeform `assignedAgent` text). */
+// Ids callers (notably an LLM choosing an agentId for delegate_to_agent) can
+// reasonably guess that don't map from id or label alone. "manager" is the
+// Manager role's registry id, but its source file is agents/PROJECT_MANAGER.md
+// (see that file's history) — "project_manager" is a natural filename-derived
+// guess that would otherwise resolve to nothing.
+const ID_ALIASES: Record<string, string> = {
+  project_manager: "manager",
+};
+
+/** Looks up an agent by its registry id, DB `Agent.name`, or a human label — case/whitespace-insensitive. Falls back to a neutral default for unknown values (e.g. a task's freeform `assignedAgent` text). */
 export function getAgentMeta(nameOrId: string | null | undefined): AgentMeta {
   if (!nameOrId) return UNKNOWN_AGENT;
   const key = normalize(nameOrId);
+  const aliasId = ID_ALIASES[key];
   return (
     BY_ID.get(key) ??
-    AGENT_REGISTRY.find((a) => normalize(a.label) === key) ?? {
+    AGENT_REGISTRY.find((a) => normalize(a.label) === key) ??
+    (aliasId ? BY_ID.get(aliasId) : undefined) ?? {
       ...UNKNOWN_AGENT,
       id: nameOrId,
       label: nameOrId,

@@ -1,3 +1,11 @@
+---
+name: qa_engineer
+model: claude-sonnet-5
+maxTokens: 1024
+effort: medium
+maxToolIterations: 6
+---
+
 # Role
 
 **QA Engineer** — tests, recette fonctionnelle et garant de la qualité avant toute mise en production.

@@ -1,3 +1,11 @@
+---
+name: devops_engineer
+model: claude-sonnet-5
+maxTokens: 1024
+effort: medium
+maxToolIterations: 6
+---
+
 # Role
 
 **DevOps Engineer** — intégration continue, déploiement et infrastructure cloud des projets Nexus AI.
