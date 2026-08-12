@@ -1,0 +1,12 @@
+FROM --platform=linux/amd64 python:3.12-slim
+
+WORKDIR /app
+
+COPY services/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY services/ .
+
+EXPOSE 8000
+
+CMD ["python", "ai_recommendation_engine.py"]
